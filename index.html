@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Financial Tool</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #f4f7fa;
+    margin: 0;
+    padding: 0;
+  }
+  header {
+    background-color: #2f80ed;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+  }
+  main {
+    max-width: 900px;
+    margin: 2rem auto;
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  }
+  h1, h2 {
+    margin-top: 0;
+  }
+  form {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  input[type="text"], input[type="number"] {
+    flex: 1 1 200px;
+    padding: 0.5rem;
+    font-size: 1rem;
+  }
+  input[type="submit"], button {
+    background-color: #2f80ed;
+    color: white;
+    border: none;
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  input[type="submit"]:hover, button:hover {
+    background-color: #1c5dcc;
+  }
+  .expense-list {
+    margin-top: 1rem;
+    border-collapse: collapse;
+    width: 100%;
+  }
+  .expense-list th, .expense-list td {
+    border-bottom: 1px solid #ddd;
+    padding: 0.7rem;
+    text-align: left;
+  }
+  .expense-list th {
+    background-color: #eaf1fb;
+  }
+  .dashboard {
+    margin-top: 2rem;
+    background: #f0f4ff;
+    padding: 1rem;
+    border-radius: 6px;
+  }
+  .alert {
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 5px;
+    color: white;
+    font-weight: bold;
+  }
+  .alert.warning {
+    background-color: #f2c94c;
+    color: #663d00;
+  }
+  .alert.danger {
+    background-color: #eb5757;
+  }
+  label {
+    font-weight: bold;
+  }
+  .goal-input {
+    margin-top: 1rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>AI Financial Tool</h1>
+  <p>Automated Expense Categorization & Predictive Spending Analysis</p>
+</header>
+
+<main>
+  <section>
+    <h2>Add Expense</h2>
+    <form id="expense-form">
+      <input type="text" id="desc" placeholder="Expense Description" required />
+      <input type="number" id="amount" placeholder="Amount ($)" min="0.01" step="0.01" required />
+      <input type="submit" value="Add Expense" />
+    </form>
+
+    <table class="expense-list" id="expense-table" aria-label="Expenses list">
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Category</th>
+          <th>Amount ($)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+  <section class="goal-input">
+    <h2>Set Monthly Budget & Goal</h2>
+    <label for="budget">Monthly Budget ($):</label>
+    <input type="number" id="budget" min="0" step="0.01" placeholder="e.g. 2000" />
+    <br /><br />
+    <label for="goal">Savings Goal ($):</label>
+    <input type="number" id="goal" min="0" step="0.01" placeholder="e.g. 500" />
+    <br /><br />
+    <button id="save-settings">Save Settings</button>
+  </section>
+
+  <section class="dashboard" aria-live="polite" aria-atomic="true">
+    <h2>Dashboard</h2>
+    <p><strong>Total Expenses:</strong> $<span id="total-expenses">0.00</span></p>
+    <p><strong>Predicted Spending This Month:</strong> $<span id="predicted-spending">0.00</span></p>
+    <p><strong>Remaining Budget:</strong> $<span id="remaining-budget">0.00</span></p>
+    <p><strong>Savings Goal:</strong> $<span id="savings-goal">0.00</span></p>
+    <p><strong>Projected Savings:</strong> $<span id="projected-savings">0.00</span></p>
+
+    <div id="budget-alert" class="alert" style="display:none;"></div>
+  </section>
+</main>
+
+<script>
+  // Expense categories based on keywords (simple AI)
+  const categories = {
+    food: ['coffee', 'restaurant', 'lunch', 'dinner', 'breakfast', 'meal', 'groceries', 'supermarket', 'food'],
+    transport: ['bus', 'train', 'uber', 'taxi', 'metro', 'fuel', 'gas', 'transport'],
+    entertainment: ['movie', 'cinema', 'concert', 'game', 'entertainment', 'netflix', 'spotify'],
+    bills: ['electricity', 'water', 'internet', 'rent', 'phone', 'bill', 'subscription'],
+    shopping: ['clothes', 'shoes', 'amazon', 'shopping', 'gift'],
+    health: ['doctor', 'pharmacy', 'medicine', 'health', 'gym'],
+    other: []
+  };
+
+  let expenses = [];
+  let budget = 0;
+  let savingsGoal = 0;
+
+  const expenseForm = document.getElementById('expense-form');
+  const expenseTableBody = document.querySelector('#expense-table tbody');
+
+  const totalExpensesEl = document.getElementById('total-expenses');
+  const predictedSpendingEl = document.getElementById('predicted-spending');
+  const remainingBudgetEl = document.getElementById('remaining-budget');
+  const savingsGoalEl = document.getElementById('savings-goal');
+  const projectedSavingsEl = document.getElementById('projected-savings');
+  const budgetAlertEl = document.getElementById('budget-alert');
+
+  const budgetInput = document.getElementById('budget');
+  const goalInput = document.getElementById('goal');
+  const saveSettingsBtn = document.getElementById('save-settings');
+
+  // Categorize expense based on description keywords
+  function categorizeExpense(description) {
+    description = description.toLowerCase();
+    for (const [category, keywords] of Object.entries(categories)) {
+      for (const kw of keywords) {
+        if (description.includes(kw)) return category.charAt(0).toUpperCase() + category.slice(1);
+      }
+    }
+    return 'Other';
+  }
+
+  // Add expense to the list and update dashboard
+  function addExpense(desc, amount) {
+    const category = categorizeExpense(desc);
+    const expense = { desc, amount: parseFloat(amount), category, date: new Date() };
+    expenses.push(expense);
+    updateExpenseTable();
+    updateDashboard();
+  }
+
+  // Update the expense table UI
+  function updateExpenseTable() {
+    expenseTableBody.innerHTML = '';
+    expenses.forEach(exp => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${exp.desc}</td>
+        <td>${exp.category}</td>
+        <td>$${exp.amount.toFixed(2)}</td>
+      `;
+      expenseTableBody.appendChild(tr);
+    });
+  }
+
+  // Calculate total expenses
+  function getTotalExpenses() {
+    return expenses.reduce((acc, exp) => acc + exp.amount, 0);
+  }
+
+  // Predict spending for the whole month based on daily average so far
+  function predictSpending() {
+    if (expenses.length === 0) return 0;
+    const today = new Date();
+    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    const daysPassed = (today - startOfMonth) / (1000 * 3600 * 24) + 1;
+    const totalSoFar = getTotalExpenses();
+    const dailyAverage = totalSoFar / daysPassed;
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    return dailyAverage * daysInMonth;
+  }
+
+  // Update dashboard info and alerts
+  function updateDashboard() {
+    const total = getTotalExpenses();
+    const predicted = predictSpending();
+    const remaining = budget - total;
+    const projectedSavings = budget - predicted;
+    
+    totalExpensesEl.textContent = total.toFixed(2);
+    predictedSpendingEl.textContent = predicted.toFixed(2);
+    remainingBudgetEl.textContent = remaining.toFixed(2);
+    savingsGoalEl.textContent = savingsGoal.toFixed(2);
+    projectedSavingsEl.textContent = projectedSavings.toFixed(2);
+
+    // Budget alerts
+    if (budget > 0) {
+      if (predicted > budget) {
+        budgetAlertEl.style.display = 'block';
+        budgetAlertEl.className = 'alert danger';
+        budgetAlertEl.textContent = `Alert! You are predicted to exceed your budget by $${(predicted - budget).toFixed(2)}.`;
+      } else if (predicted > budget * 0.8) {
+        budgetAlertEl.style.display = 'block';
+        budgetAlertEl.className = 'alert warning';
+        budgetAlertEl.textContent = `Warning: You are close to your budget limit.`;
+      } else {
+        budgetAlertEl.style.display = 'none';
+      }
+    } else {
+      budgetAlertEl.style.display = 'none';
+    }
+
+    // Goal alert
+    if (savingsGoal > 0 && projectedSavings < savingsGoal) {
+      budgetAlertEl.style.display = 'block';
+      budgetAlertEl.className = 'alert danger';
+      budgetAlertEl.textContent = `You may not meet your savings goal of $${savingsGoal.toFixed(2)} this month. Consider reducing expenses.`;
+    }
+  }
+
+  // Event: add expense
+  expenseForm.addEventListener('submit', e => {
+    e.preventDefault();
+    const desc = document.getElementById('desc').value.trim();
+    const amount = parseFloat(document.getElementById('amount').value);
+    if (desc && amount > 0) {
+      addExpense(desc, amount);
+      expenseForm.reset();
+    }
+  });
+
+  // Event: save budget and goal settings
+  saveSettingsBtn.addEventListener('click', () => {
+    const newBudget = parseFloat(budgetInput.value);
+    const newGoal = parseFloat(goalInput.value);
+    if (!isNaN(newBudget) && newBudget >= 0) budget = newBudget;
+    if (!isNaN(newGoal) && newGoal >= 0) savingsGoal = newGoal;
+    updateDashboard();
+  });
+
+</script>
+
+</body>
+</html>
